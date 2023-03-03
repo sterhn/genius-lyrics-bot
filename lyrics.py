@@ -4,7 +4,7 @@ import requests
 from dotenv import load_dotenv
 from telebot import types
 
-# загружаем токен через енв файл
+# loading bot token with env
 load_dotenv()
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 HEADERS = {
