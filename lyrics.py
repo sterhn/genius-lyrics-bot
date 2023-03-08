@@ -1,8 +1,8 @@
 import os
+from unittest import result
 import telebot
 import requests
 from dotenv import load_dotenv
-from telebot import types
 
 load_dotenv()
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
@@ -18,14 +18,16 @@ def find_artist(artist):
 	headers = HEADERS
 	response = requests.request('GET', url, headers=HEADERS, params=querystring)
 	answer= response.json()['sections'][3]['hits']
+	# поправить
 	if not answer:
-		raise Exception
+		raise UnboundLocalError('No result found')
 	answer = answer[0]['result']
 	artist_id = answer['id']
 	cover_photo = answer['image_url']
 	title = answer['name']
 	description = artist_details(artist_id)
 	return title, description, cover_photo
+
 # looking for song id
 def find_song(song):
 	url = 'https://genius-song-lyrics1.p.rapidapi.com/search/'
@@ -33,12 +35,14 @@ def find_song(song):
 	response = requests.request('GET', url, headers=HEADERS, params=querystring)
 	response = response.json()['hits'][0]['result']
 	return response['id'], response['full_title'], response['url']
+
 # artist description just because
 def artist_details(id):
 	url = 'https://genius-song-lyrics1.p.rapidapi.com/artist/details/'
 	querystring = {'id':id, 'text_format':'plain'}
 	response = requests.request('GET', url, headers=HEADERS, params=querystring)
 	return response.json()['artist']['description']['plain']
+
 # searching for lyrics
 def song_lyrics(song_id):
 	url = 'https://genius-song-lyrics1.p.rapidapi.com/song/lyrics/'
@@ -46,6 +50,18 @@ def song_lyrics(song_id):
 	response = requests.request('GET', url, headers=HEADERS, params=querystring)
 	lyrics = response.json()['lyrics']['lyrics']['body']['plain']
 	return lyrics
+
+# in case messages are too
+def batch_messages(message):
+	result = []
+	while len(message) > 4095:
+		part = message[:4095].rfind('\n\n')
+		if part == -1:
+			part = 4095
+		result.append(message[:part])
+		message = message[part:]
+	result.append(message)
+	return result
 
 # ------------------------BOT -------------------------
 bot = telebot.TeleBot(BOT_TOKEN)
@@ -62,7 +78,7 @@ def artist_desc(message):
 		bot.send_message(message.chat.id, text= '<b> 💽 '+ artist + ' </>', parse_mode='html')
 		bot.send_message(message.chat.id, text= '<i> '+ desc + ' </>', parse_mode='html')
 		bot.send_photo(message.chat.id, photo)
-	except Exception as e:
+	except UnboundLocalError:
 		bot.send_message(message.chat.id, 'Can\'t find this artist. Can you try again?')	
 		bot.send_photo(message.chat.id,'https://i.pinimg.com/474x/5c/09/ab/5c09ab5bc07ef08b98e402572939db4d.jpg')
 
@@ -73,12 +89,9 @@ def get_text_messages(message):
 		song_id, title, link = find_song(message.text)
 		lyrics = song_lyrics(song_id)
 		bot.send_message(message.chat.id, text= '<b> 🎤 '+ title + ' </>', parse_mode='html')
-		if len(lyrics)>4095:
-			part = lyrics[:4095].rfind('\n\n')
-			bot.send_message(message.chat.id, text= '<i> '+ lyrics[:part] + ' </>', parse_mode='html')
-			bot.send_message(message.chat.id, text= '<i> '+ lyrics[part:] + ' </>', parse_mode='html')
-		else:
-			bot.send_message(message.chat.id, text= '<i> '+ lyrics + ' </>', parse_mode='html')
+		messages = batch_messages(lyrics)
+		for msg in messages:
+			bot.send_message(message.chat.id, text= '<i> '+ msg + ' </>', parse_mode='html')
 		bot.send_message(message.chat.id, text = f'[✨]({link})', parse_mode='MarkdownV2')
 
 # Enable saving next step handlers to file './.handlers-saves/step.save'.
